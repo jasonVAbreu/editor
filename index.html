@@ -197,25 +197,45 @@
 
   // ===== Convertir a absoluto manteniendo posición visual (no se mueven)
   function makeAbsolute(el){
-    if(!el || el===canvas) return;
-    const cRect = canvasRect();
-    const r = el.getBoundingClientRect();
-    const w = r.width  / zoom;
-    const h = r.height / zoom;
-    const left = ((r.left - cRect.left) + canvas.scrollLeft) / zoom;
-    const top  = ((r.top  - cRect.top ) + canvas.scrollTop ) / zoom;
+  if(!el || el===canvas) return;
 
-    el.style.margin = '0';
-    el.style.position = 'absolute';
-    el.style.left = left + 'px';
-    el.style.top  = top  + 'px';
-    el.style.width = w + 'px';
-    if(h > 0) el.style.height = h + 'px';
-    el.style.boxSizing = 'border-box';
-    if(!el.style.zIndex) el.style.zIndex = '1';
+  const cRect = canvas.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
 
-    if(el.parentElement !== canvas){ canvas.appendChild(el); } // reparent al canvas
+  // Calcula posición relativa al canvas
+  const left = r.left - cRect.left + canvas.scrollLeft;
+  const top  = r.top  - cRect.top  + canvas.scrollTop;
+  const w = r.width;
+  const h = r.height;
+
+  // Estilos absolutos para mantener el sitio exacto
+  el.style.position = 'absolute';
+  el.style.left = left + 'px';
+  el.style.top  = top  + 'px';
+  el.style.width = w + 'px';
+  el.style.height= h + 'px';
+  el.style.margin = '0';
+  el.style.boxSizing = 'border-box';
+  if(!el.style.zIndex) el.style.zIndex = '1';
+
+  // Mueve el nodo al canvas manteniendo la apariencia
+  if(el.parentElement !== canvas){
+    canvas.appendChild(el);
   }
+}
+
+$('#btnToAbsolute').onclick = ()=>{
+  const list = $$('#canvas *:not(style):not(script)');
+  list.forEach(el=>{
+    if(el===canvas) return;
+    makeAbsolute(el);
+    wrapDefaults(el);
+    enableInteract(el);
+  });
+  refreshList();
+  refreshHTML();
+  alert('Elementos convertidos a movibles (manteniendo posición).');
+};
 
   function wrapDefaults(el){
     el.setAttribute('tabindex','0');
