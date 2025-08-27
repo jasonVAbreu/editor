@@ -197,31 +197,33 @@
 
   // ===== Convertir a absoluto manteniendo posición visual (no se mueven)
   function makeAbsolute(el){
-  if(!el || el===canvas) return;
+  if(!el) return;
 
-  const cRect = canvas.getBoundingClientRect();
-  const r = el.getBoundingClientRect();
+  // Medimos rects en viewport
+  const parent = el.offsetParent || el.parentElement;
+  const elRect = el.getBoundingClientRect();
+  const pRect  = parent.getBoundingClientRect();
 
-  // Calcula posición relativa al canvas
-  const left = r.left - cRect.left + canvas.scrollLeft;
-  const top  = r.top  - cRect.top  + canvas.scrollTop;
-  const w = r.width;
-  const h = r.height;
+  // Posición del elemento respecto a su padre actual (padding-box)
+  const left = (elRect.left - pRect.left) + parent.scrollLeft;
+  const top  = (elRect.top  - pRect.top ) + parent.scrollTop;
 
-  // Estilos absolutos para mantener el sitio exacto
+  // Ancho/alto reales para que no colapse al pasar a absoluto
+  const w = elRect.width;
+  const h = elRect.height;
+
+  // Si era inline, evitemos que colapse al absolutizar
+  const cs = getComputedStyle(el);
+  if (cs.display === 'inline') el.style.display = 'inline-block';
+
   el.style.position = 'absolute';
   el.style.left = left + 'px';
   el.style.top  = top  + 'px';
-  el.style.width = w + 'px';
-  el.style.height= h + 'px';
+  el.style.width  = w + 'px';
+  el.style.height = h + 'px';
   el.style.margin = '0';
   el.style.boxSizing = 'border-box';
   if(!el.style.zIndex) el.style.zIndex = '1';
-
-  // Mueve el nodo al canvas manteniendo la apariencia
-  if(el.parentElement !== canvas){
-    canvas.appendChild(el);
-  }
 }
 
 $('#btnToAbsolute').onclick = ()=>{
@@ -421,14 +423,19 @@ $('#btnToAbsolute').onclick = ()=>{
 
   // NUEVO: Hacer movibles sin moverlos de sitio
   $('#btnToAbsolute').onclick = ()=>{
-    const list = $$('#canvas *:not(style):not(script)');
-    list.forEach(el=>{
-      if(el===canvas) return;
-      try{ makeAbsolute(el); wrapDefaults(el); enableInteract(el);}catch(e){}
-    });
-    refreshList(); refreshHTML();
-    alert('Elementos convertidos a movibles (posiciones preservadas).');
-  };
+  const nodes = $$('#canvas *:not(style):not(script)');
+  nodes.forEach(n=>{
+    if(n === canvas) return;
+    const st = getComputedStyle(n);
+    if (st.position !== 'absolute') {
+      try { makeAbsolute(n); wrapDefaults(n); enableInteract(n); } catch(e){}
+    } else {
+      wrapDefaults(n); enableInteract(n);
+    }
+  });
+  refreshHTML();
+  alert('Elementos convertidos a movibles (posiciones preservadas).');
+};
 
   $('#btnRefreshHTML').onclick = refreshHTML;
   $('#btnCopyHTML').onclick = ()=>{ refreshHTML(); navigator.clipboard.writeText(taOut.value); };
