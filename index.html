@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Editor Visual HTML — v4</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #canvas {
+      background: repeating-conic-gradient(#f7fafc 0% 25%, #ffffff 0% 50%) 50%/20px 20px;
+      box-shadow: inset 0 0 0 1px #e2e8f0;
+      position: relative;
+      overflow: hidden;
+      user-select: none;
+    }
+    .btn { @apply px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 active:scale-95; }
+    .btn-primary { @apply px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 active:scale-95; }
+    #elementList li {cursor:pointer; padding:2px 6px;}
+    #elementList li.active {background:#dbeafe;}
+  </style>
+</head>
+<body class="bg-white text-slate-800">
+  <div class="p-4 space-y-3">
+    <header class="flex justify-between">
+      <h1 class="text-lg font-semibold">Editor Visual HTML</h1>
+      <div class="flex gap-2">
+        <button id="btnExportHTML" class="btn-primary">Exportar HTML</button>
+        <button id="btnExportPNG" class="btn">Exportar PNG</button>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-12 gap-3">
+      <div class="col-span-3 space-y-2">
+        <button id="addRect" class="btn">Rectángulo</button>
+        <button id="addCircle" class="btn">Círculo</button>
+        <button id="addText" class="btn">Texto</button>
+        <button id="addImage" class="btn">Imagen (URL)</button>
+        <button id="btnDuplicate" class="btn">Duplicar elemento</button>
+        <h2 class="font-semibold pt-2">Elementos</h2>
+        <ul id="elementList" class="border rounded p-1 max-h-60 overflow-auto text-sm"></ul>
+        <div class="space-y-2 pt-2">
+          <h2 class="font-semibold">Importar HTML</h2>
+          <textarea id="taHTML" class="w-full border rounded p-2 h-40 text-xs font-mono" placeholder="Pega aquí tu HTML"></textarea>
+          <div class="flex gap-2">
+            <button id="btnLoadHTML" class="btn-primary">Cargar al lienzo</button>
+            <button id="btnToAbsolute" class="btn" title="Convierte todo a posicionamiento absoluto manteniendo su lugar">Hacer movibles</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-span-6">
+        <div id="canvas" style="width:1080px;height:1080px;"></div>
+      </div>
+
+      <div class="col-span-3 space-y-2">
+        <label>Texto<input id="propText" type="text" class="w-full border px-2 py-1"></label>
+        <label>Tamaño<input id="propFontSize" type="range" min="8" max="200" step="1" value="24" class="w-full"></label>
+        <label>Fuente<select id="propFontFamily" class="w-full border px-2 py-1">
+          <option value="Arial">Arial</option>
+          <option value="Verdana">Verdana</option>
+          <option value="Tahoma">Tahoma</option>
+          <option value="Georgia">Georgia</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Courier New">Courier New</option>
+          <option value="Trebuchet MS">Trebuchet MS</option>
+          <option value="Impact">Impact</option>
+          <option value="Comic Sans MS">Comic Sans MS</option>
+          <option value="Lucida Sans">Lucida Sans</option>
+          <option value="Garamond">Garamond</option>
+          <option value="Palatino Linotype">Palatino Linotype</option>
+          <option value="Segoe UI">Segoe UI</option>
+          <option value="Helvetica">Helvetica</option>
+          <option value="Monaco">Monaco</option>
+        </select></label>
+        <label>Color<input id="propColor" type="color" class="w-full"></label>
+        <button id="btnDelete" class="btn text-red-600 border-red-300">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js"></script>
+  <script>
+    const $ = s=>document.querySelector(s);
+    const canvas = $('#canvas');
+    const list = $('#elementList');
+    const taHTML = $('#taHTML');
+    let selected = null;
+    let zoom = 1;
+
+    function uid(){return 'el-'+Math.random().toString(36).slice(2,8);}
+
+    function refreshList(){
+      list.innerHTML='';
+      [...canvas.children].forEach((el,idx)=>{
+        const li=document.createElement('li');
+        const tag=el.tagName.toLowerCase();
+        li.textContent = `${idx+1}. ${el.id || tag}`;
+        if(el===selected) li.classList.add('active');
+        li.onclick = ()=>select(el);
+        list.appendChild(li);
+      });
+    });
+    }
+
+    function addElement(kind){
+      const el=document.createElement('div');
+      el.id=uid();
+      el.style.position='absolute';el.style.left='50px';el.style.top='50px';
+      el.style.width='200px';el.style.height='100px';el.style.display='flex';el.style.alignItems='center';el.style.justifyContent='center';el.style.fontFamily='Arial';el.style.fontSize='24px';
+      el.style.background='#fff';el.style.border='1px solid #ddd';el.setAttribute('data-editable','');
+      if(kind==='rect')el.textContent='Rectángulo';
+      if(kind==='circle'){el.textContent='Círculo';el.style.borderRadius='50%';}
+      if(kind==='text'){el.textContent='Texto';el.style.background='transparent';el.style.border='none';}
+      if(kind==='image'){const url=prompt('URL de la imagen:');if(!url)return;const img=document.createElement('img');img.src=url;img.style.width='100%';img.style.height='100%';el.innerHTML='';el.appendChild(img);}
+      canvas.appendChild(el);enableInteract(el);select(el);refreshList();
+    }
+
+    function select(el){
+      if(!el) return; selected = el;
+      $('#propText').value = el.textContent || '';
+      $('#propFontSize').value = parseInt(el.style.fontSize) || 24;
+      $('#propFontFamily').value = el.style.fontFamily || 'Arial';
+      $('#propColor').value = el.style.color || '#000000';
+      refreshList();
+      el.focus && el.focus();
+    }
+
+    function enableInteract(el){
+      if(el._interactEnabled) return; el._interactEnabled = true;
+      interact(el)
+        .draggable({listeners:{
+          move(e){
+            el.style.left=(parseFloat(el.style.left||0)+e.dx)+'px';
+            el.style.top =(parseFloat(el.style.top ||0)+e.dy)+'px';
+          }
+        }})
+        .resizable({edges:{left:true,right:true,bottom:true,top:true}})
+        .on('resizemove',e=>{
+          el.style.width = e.rect.width + 'px';
+          el.style.height= e.rect.height+ 'px';
+        });
+    }}}).resizable({edges:{left:true,right:true,bottom:true,top:true}}).on('resizemove',e=>{el.style.width=e.rect.width+'px';el.style.height=e.rect.height+'px';});
+    }
+
+    // Mover con teclado
+    document.addEventListener('keydown',e=>{
+      if(!selected)return;
+      const step=(e.shiftKey?10:2);
+      if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
+        e.preventDefault();
+        let l=parseInt(selected.style.left)||0;
+        let t=parseInt(selected.style.top)||0;
+        if(e.key==='ArrowUp')t-=step;
+        if(e.key==='ArrowDown')t+=step;
+        if(e.key==='ArrowLeft')l-=step;
+        if(e.key==='ArrowRight')l+=step;
+        selected.style.left=l+'px';
+        selected.style.top=t+'px';
+      }
+    });
+
+    $('#addRect').onclick=()=>addElement('rect');
+    $('#addCircle').onclick=()=>addElement('circle');
+    $('#addText').onclick=()=>addElement('text');
+    $('#addImage').onclick=()=>addElement('image');
+
+    $('#btnDuplicate').onclick=()=>{if(!selected)return;const clone=selected.cloneNode(true);clone.id=uid();clone.style.left=(parseInt(selected.style.left)+20)+'px';clone.style.top=(parseInt(selected.style.top)+20)+'px';canvas.appendChild(clone);enableInteract(clone);select(clone);refreshList();};
+
+    $('#btnDelete').onclick=()=>{if(selected){selected.remove();selected=null;refreshList();}};
+
+    $('#btnExportHTML').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([canvas.innerHTML],{type:'text/html'}));a.download='post.html';a.click();};
+    $('#btnExportPNG').onclick=async()=>{const dataUrl=await htmlToImage.toPng(canvas);const a=document.createElement('a');a.href=dataUrl;a.download='post.png';a.click();};
+
+    // Botón Hacer movibles: solo cambia a absolute sin moverlos
+    $('#btnToAbsolute').onclick=()=>{
+      [...canvas.querySelectorAll('*')].forEach(el=>{
+        if(el===canvas) return;
+        const cs=getComputedStyle(el);
+        if(cs.position!=='absolute'){
+          el.style.position='absolute';
+          el.style.left=el.offsetLeft+'px';
+          el.style.top=el.offsetTop+'px';
+        }
+        enableInteract(el);
+      });
+      refreshList();
+    };
+
+    canvas.addEventListener('click', e => {
+      const el = e.target.closest('#canvas > *');
+      if(el) select(el);
+    });}});
+    // ======= Convertir a absoluto sin mover (mantener lugar actual) =======
+    function makeAbsolute(el){
+      if(!el || el===canvas) return;
+      const cRect = canvas.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      const left = (r.left - cRect.left) + canvas.scrollLeft;
+      const top  = (r.top  - cRect.top ) + canvas.scrollTop;
+      const w = r.width; const h = r.height;
+      if(el.parentElement !== canvas){ canvas.appendChild(el); }
+      el.style.margin='0';
+      el.style.position='absolute';
+      el.style.left = left + 'px';
+      el.style.top  = top  + 'px';
+      el.style.width = w + 'px';
+      if(h>0) el.style.height = h + 'px';
+      if(!el.style.zIndex) el.style.zIndex='1';
+      el.setAttribute('data-editable','');
+      enableInteract(el);
+    }
+    function makeAllMovable(){
+      const nodes = canvas.querySelectorAll('#canvas *:not(style):not(script)');
+      nodes.forEach(n=>{ if(n!==canvas) makeAbsolute(n); });
+      refreshList();
+    }
+    // Cargar HTML a lienzo
+    if(document.getElementById('btnLoadHTML')){
+      document.getElementById('btnLoadHTML').onclick = ()=>{ canvas.innerHTML = (document.getElementById('taHTML').value || ''); refreshList(); };
+    }
+    if(document.getElementById('btnToAbsolute')){
+      document.getElementById('btnToAbsolute').onclick = ()=> makeAllMovable();
+    }
+
+  </script>
+</body>
+</html>
